@@ -1,2 +1,4 @@
 # TP-1
-Melhor jogo já feito por três alunos da turma de Gilda de computação gráfica de 2026
+Arthur Pinheiro Brandão Silva - 23.1.8109
+João Miguel Barros de Lacerda -
+Charlie 
