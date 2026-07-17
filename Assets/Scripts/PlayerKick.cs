@@ -27,6 +27,9 @@ public class PlayerKick : MonoBehaviour
     [SerializeField] private float kickLift = 0.18f;
     [SerializeField] private float kickForward = 0.22f;
 
+    [Header("Áudio")]
+    [SerializeField] private GameAudio gameAudio;
+
     private float cooldownTimer;
     private bool isAnimating;
 
@@ -107,6 +110,16 @@ public class PlayerKick : MonoBehaviour
             kickForce,
             ForceMode2D.Impulse
         );
+
+        ballRigidbody.AddForce(
+         kickForce,
+         ForceMode2D.Impulse
+        );
+
+        if (gameAudio != null)
+        {
+            gameAudio.PlayKick();
+        }
     }
 
     private IEnumerator AnimateKick()

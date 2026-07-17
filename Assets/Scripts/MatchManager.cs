@@ -1,4 +1,5 @@
 using System.Collections;
+using TMPro;
 using UnityEngine;
 
 public class MatchManager : MonoBehaviour
@@ -9,9 +10,16 @@ public class MatchManager : MonoBehaviour
     [SerializeField] private Rigidbody2D player2Rigidbody;
     [SerializeField] private Transform ballSpawn;
 
-    [Header("Partida")]
+    [Header("Configuração da partida")]
     [SerializeField] private int maxScore = 5;
     [SerializeField] private float resetDelay = 1f;
+    [SerializeField] private float matchRestartDelay = 3f;
+
+    [Header("Interface")]
+    [SerializeField] private TMP_Text scoreText;
+
+    [Header("Áudio")]
+    [SerializeField] private GameAudio gameAudio;
 
     private Vector2 player1StartPosition;
     private Vector2 player2StartPosition;
@@ -34,19 +42,10 @@ public class MatchManager : MonoBehaviour
             player2StartPosition = player2Rigidbody.position;
         }
 
-        if (ballRigidbody == null)
-        {
-            Debug.LogError(
-                "O Rigidbody 2D da bola não foi configurado."
-            );
-        }
+        player1Score = 0;
+        player2Score = 0;
 
-        if (ballSpawn == null)
-        {
-            Debug.LogError(
-                "O BallSpawn não foi configurado."
-            );
-        }
+        UpdateScoreText();
     }
 
     public void RegisterGoal(int scoringPlayer)
@@ -68,9 +67,15 @@ public class MatchManager : MonoBehaviour
         }
         else
         {
+            Debug.LogWarning(
+                "Número de jogador inválido ao registrar o gol."
+            );
+
             resettingRound = false;
             return;
         }
+
+        UpdateScoreText();
 
         Debug.Log(
             "Gol do Jogador " + scoringPlayer +
@@ -78,13 +83,24 @@ public class MatchManager : MonoBehaviour
             player1Score + " x " + player2Score
         );
 
-        if (
+        bool reachedMaximumScore =
             player1Score >= maxScore ||
-            player2Score >= maxScore
-        )
+            player2Score >= maxScore;
+
+        if (reachedMaximumScore)
         {
+            if (gameAudio != null)
+            {
+                gameAudio.PlayVictory();
+            }
+
             FinishMatch(scoringPlayer);
             return;
+        }
+
+        if (gameAudio != null)
+        {
+            gameAudio.PlayGoal();
         }
 
         StartCoroutine(ResetRound());
@@ -92,13 +108,7 @@ public class MatchManager : MonoBehaviour
 
     private IEnumerator ResetRound()
     {
-        // Faz a bola desaparecer imediatamente e impede
-        // qualquer nova colisão com o gol.
-        if (ballRigidbody != null)
-        {
-            StopBody(ballRigidbody);
-            ballRigidbody.gameObject.SetActive(false);
-        }
+        DisableBall();
 
         StopBody(player1Rigidbody);
         StopBody(player2Rigidbody);
@@ -120,17 +130,88 @@ public class MatchManager : MonoBehaviour
         resettingRound = false;
     }
 
-    private void ResetBall()
+    private void FinishMatch(int winningPlayer)
     {
-        if (
-            ballRigidbody == null ||
-            ballSpawn == null
-        )
+        matchFinished = true;
+
+        DisableBall();
+
+        StopBody(player1Rigidbody);
+        StopBody(player2Rigidbody);
+
+        SetPlayerControls(
+            player1Rigidbody,
+            false
+        );
+
+        SetPlayerControls(
+            player2Rigidbody,
+            false
+        );
+
+        Debug.Log(
+            "Jogador " + winningPlayer +
+            " venceu a partida!"
+        );
+
+        StartCoroutine(RestartMatchAfterDelay());
+    }
+
+    private IEnumerator RestartMatchAfterDelay()
+    {
+        yield return new WaitForSeconds(matchRestartDelay);
+
+        player1Score = 0;
+        player2Score = 0;
+
+        UpdateScoreText();
+
+        ResetBody(
+            player1Rigidbody,
+            player1StartPosition
+        );
+
+        ResetBody(
+            player2Rigidbody,
+            player2StartPosition
+        );
+
+        ResetBall();
+
+        SetPlayerControls(
+            player1Rigidbody,
+            true
+        );
+
+        SetPlayerControls(
+            player2Rigidbody,
+            true
+        );
+
+        matchFinished = false;
+        resettingRound = false;
+
+        Debug.Log("Nova partida iniciada.");
+    }
+
+    private void DisableBall()
+    {
+        if (ballRigidbody == null)
         {
             return;
         }
 
-        // Reposiciona o GameObject antes de reativar a física.
+        StopBody(ballRigidbody);
+        ballRigidbody.gameObject.SetActive(false);
+    }
+
+    private void ResetBall()
+    {
+        if (ballRigidbody == null || ballSpawn == null)
+        {
+            return;
+        }
+
         ballRigidbody.transform.position =
             ballSpawn.position;
 
@@ -139,44 +220,15 @@ public class MatchManager : MonoBehaviour
 
         ballRigidbody.gameObject.SetActive(true);
 
-        // Garante que Rigidbody e Transform fiquem sincronizados.
-        ballRigidbody.position = ballSpawn.position;
+        ballRigidbody.position =
+            ballSpawn.position;
+
         ballRigidbody.rotation = 0f;
         ballRigidbody.linearVelocity = Vector2.zero;
         ballRigidbody.angularVelocity = 0f;
 
         Physics2D.SyncTransforms();
         ballRigidbody.WakeUp();
-    }
-
-    private void FinishMatch(int winningPlayer)
-    {
-        matchFinished = true;
-
-        StopBody(ballRigidbody);
-        StopBody(player1Rigidbody);
-        StopBody(player2Rigidbody);
-
-        if (ballRigidbody != null)
-        {
-            ballRigidbody.gameObject.SetActive(false);
-        }
-
-        Debug.Log(
-            "Jogador " + winningPlayer +
-            " venceu a partida!"
-        );
-    }
-
-    private void StopBody(Rigidbody2D body)
-    {
-        if (body == null)
-        {
-            return;
-        }
-
-        body.linearVelocity = Vector2.zero;
-        body.angularVelocity = 0f;
     }
 
     private void ResetBody(
@@ -191,9 +243,62 @@ public class MatchManager : MonoBehaviour
 
         body.position = startPosition;
         body.transform.position = startPosition;
+
         body.rotation = 0f;
+        body.transform.rotation = Quaternion.identity;
+
         body.linearVelocity = Vector2.zero;
         body.angularVelocity = 0f;
+
         body.WakeUp();
+    }
+
+    private void StopBody(Rigidbody2D body)
+    {
+        if (body == null)
+        {
+            return;
+        }
+
+        body.linearVelocity = Vector2.zero;
+        body.angularVelocity = 0f;
+    }
+
+    private void UpdateScoreText()
+    {
+        if (scoreText == null)
+        {
+            return;
+        }
+
+        scoreText.text =
+            player1Score + "  x  " + player2Score;
+    }
+
+    private void SetPlayerControls(
+        Rigidbody2D playerBody,
+        bool controlsEnabled
+    )
+    {
+        if (playerBody == null)
+        {
+            return;
+        }
+
+        PlayerController controller =
+            playerBody.GetComponent<PlayerController>();
+
+        PlayerKick kick =
+            playerBody.GetComponent<PlayerKick>();
+
+        if (controller != null)
+        {
+            controller.enabled = controlsEnabled;
+        }
+
+        if (kick != null)
+        {
+            kick.enabled = controlsEnabled;
+        }
     }
 }
